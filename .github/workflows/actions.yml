@@ -1,0 +1,63 @@
+on:
+  push:
+    branches:
+    - '*'
+    tags:
+    - '*'
+  pull_request:
+    branches:
+      - master
+    types:
+      - opened
+      - reopened
+
+jobs:
+  unit-test:
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest']
+        perl: [ '5.30', '5.28', '5.10' ]
+      max-parallel: 2
+    name: Perl unit tests ${{ matrix.perl }} on ${{ matrix.os }}
+
+    steps:
+      - name: Grab release tarball
+        uses: actions/download-artifact@v1
+        with:
+          name: release-tarball
+      - run: tar xzf release-tarball/App-cpanminus-reporter-*.tar.gz --strip 1
+      - run: rm -rf release-tarball
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@v1.3.1
+        with:
+          perl-version: ${{ matrix.perl }}
+      - run: perl -V
+      - run: cpanm --quiet --notest --installdeps .
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest']
+        perl: [ '5.30' ]
+      max-parallel: 2
+    name: CPAN build ${{ matrix.perl }} on ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@v1.3.1
+        with:
+          perl-version: ${{ matrix.perl }}
+      - run: perl -V
+      - run: perl Makefile.PL
+      - run: make tardist
+      - uses: actions/upload-artifact@v2
+        with:
+          path: App-cpanminus-reporter-*.tar.gz
+          name: release-tarball
